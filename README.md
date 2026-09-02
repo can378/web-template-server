@@ -15,7 +15,7 @@ JDK 21을 설치한 뒤 실행합니다.
 서버 상태 확인:
 
 ```text
-http://localhost:8080/api/health
+http://localhost:8100/api/health
 ```
 
 개발 명령어, 기술 및 파일 설명은 [HELP.md](HELP.md)를 참고하세요.
