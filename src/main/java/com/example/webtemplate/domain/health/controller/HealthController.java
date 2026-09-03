@@ -1,4 +1,4 @@
-package com.example.webtemplate.health;
+package com.example.webtemplate.domain.health.controller;
 
 import java.util.Map;
 

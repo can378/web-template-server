@@ -1,4 +1,4 @@
-package com.example.webtemplate.health;
+package com.example.webtemplate.domain.health.controller;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -10,7 +10,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.example.webtemplate.config.WebConfig;
+import com.example.webtemplate.global.config.WebConfig;
 
 @WebMvcTest(HealthController.class)
 @Import(WebConfig.class)
