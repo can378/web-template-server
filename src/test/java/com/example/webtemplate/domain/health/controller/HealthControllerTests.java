@@ -11,10 +11,17 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.example.webtemplate.global.config.WebConfig;
+import com.example.webtemplate.global.security.SecurityConfig;
+import com.example.webtemplate.global.security.LoginRateLimiter;
+import com.example.webtemplate.domain.user.repository.UserRepository;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 @WebMvcTest(HealthController.class)
-@Import(WebConfig.class)
+@Import({WebConfig.class, SecurityConfig.class, LoginRateLimiter.class})
 class HealthControllerTests {
+
+	@MockitoBean
+	private UserRepository users;
 
 	@Autowired
 	private MockMvc mockMvc;
