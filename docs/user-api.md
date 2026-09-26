@@ -16,7 +16,7 @@ Spring Security + 서버 메모리 세션 + Spring JDBC를 사용합니다.
 `DATETIME`과 `DATETIME(6)` 모두 사용할 수 있습니다.
 
 DB 접속은 프로젝트 루트 `.env`의 `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD`를 사용합니다.
-회원가입 전 `web_roles`에 `ROLE_USER`가 있어야 합니다. 없으면 가입 요청은 503으로 실패하며 사용자는 생성되지 않습니다.
+회원가입 전 `web_roles`에 `NORMAL_USER`가 있어야 합니다. 없으면 가입 요청은 503으로 실패하며 사용자는 생성되지 않습니다.
 `ROLE_ADMIN`은 관리자가 DB에서 별도로 부여합니다. 공개 API를 통한 관리자 가입이나 역할 변경은 제공하지 않습니다.
 
 ## API 목록

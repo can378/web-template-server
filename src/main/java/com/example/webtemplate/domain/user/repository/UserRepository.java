@@ -34,7 +34,7 @@ public class UserRepository {
     }
 
     public Optional<Long> defaultRole() {
-        return jdbc.sql("SELECT role_id FROM web_roles WHERE role_code = 'ROLE_USER'")
+        return jdbc.sql("SELECT role_id FROM web_roles WHERE role_code = 'NORMAL_USER'")
                 .query(Long.class).optional();
     }
 

@@ -40,14 +40,14 @@ class UserApiTests {
         jdbc.sql("DELETE FROM web_user_roles").update();
         jdbc.sql("DELETE FROM web_users").update();
         jdbc.sql("DELETE FROM web_roles").update();
-        jdbc.sql("INSERT INTO web_roles (role_code, role_name) VALUES ('ROLE_USER', 'Member'), ('ROLE_ADMIN', 'Admin')").update();
+        jdbc.sql("INSERT INTO web_roles (role_code, role_name) VALUES ('NORMAL_USER', 'Member'), ('ROLE_ADMIN', 'Admin')").update();
     }
 
     @Test
     void signupHashesPasswordAndOnlyAssignsMemberRole() throws Exception {
         mvc.perform(post("/api/users").with(csrf()).contentType(MediaType.APPLICATION_JSON)
                         .content(signupJson("member01", "one@example.com")))
-                .andExpect(status().isCreated()).andExpect(jsonPath("$.roles[0]").value("ROLE_USER"))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.roles[0]").value("NORMAL_USER"))
                 .andExpect(jsonPath("$.passwordHash").doesNotExist());
         String hash = jdbc.sql("SELECT password_hash FROM web_users WHERE login_id = 'member01'").query(String.class).single();
         assertThat(hash).isNotEqualTo(PASSWORD);
@@ -69,7 +69,7 @@ class UserApiTests {
 
     @Test
     void missingDefaultRoleDoesNotCreatePartialUser() throws Exception {
-        jdbc.sql("DELETE FROM web_roles WHERE role_code = 'ROLE_USER'").update();
+        jdbc.sql("DELETE FROM web_roles WHERE role_code = 'NORMAL_USER'").update();
         mvc.perform(post("/api/users").with(csrf()).contentType(MediaType.APPLICATION_JSON)
                 .content(signupJson("member01", null))).andExpect(status().isServiceUnavailable());
         assertThat(jdbc.sql("SELECT COUNT(*) FROM web_users").query(Long.class).single()).isZero();
@@ -142,7 +142,7 @@ class UserApiTests {
         mvc.perform(patch("/api/users/me").session(session).with(csrf()).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"name\":\"Updated\",\"email\":\"updated@example.com\",\"status\":\"ACTIVE\",\"roles\":[\"ROLE_ADMIN\"]}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.name").value("Updated"))
-                .andExpect(jsonPath("$.roles[0]").value("ROLE_USER"));
+                .andExpect(jsonPath("$.roles[0]").value("NORMAL_USER"));
         mvc.perform(get("/api/admin/users").session(session)).andExpect(status().isForbidden());
     }
 
