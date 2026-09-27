@@ -1,0 +1,125 @@
+name: Deploy Spring server
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    env:
+      IMAGE_TAG: ${{ github.sha }}
+      DEPLOY_PLATFORM: ${{ vars.DEPLOY_PLATFORM || 'linux/amd64' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Validate deployment settings
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+        run: |
+          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_PRIVATE_KEY DEPLOY_PATH; do
+            if [ -z "${!name}" ]; then
+              echo "Missing required GitHub secret/variable: $name" >&2
+              exit 1
+            fi
+          done
+          case "$DEPLOY_PATH" in
+            /*) ;;
+            *) echo "DEPLOY_PATH must be an absolute server path." >&2; exit 1 ;;
+          esac
+
+      - name: Build and save Docker image
+        run: |
+          docker buildx build \
+            --platform "$DEPLOY_PLATFORM" \
+            --tag "web-template-server:$IMAGE_TAG" \
+            --load .
+          docker save "web-template-server:$IMAGE_TAG" | gzip > web-template-server.tar.gz
+
+      - name: Prepare deployment files
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
+          SESSION_COOKIE_SECURE: ${{ vars.SESSION_COOKIE_SECURE || 'true' }}
+        run: |
+          for name in DB_HOST DB_PORT DB_NAME DB_USERNAME DB_PASSWORD FRONTEND_ORIGIN; do
+            if [ -z "${!name}" ]; then
+              echo "Missing required GitHub secret/variable: $name" >&2
+              exit 1
+            fi
+          done
+          mkdir upload
+          cp web-template-server.tar.gz upload/
+          {
+            printf 'DB_HOST=%s\n' "$DB_HOST"
+            printf 'DB_PORT=%s\n' "$DB_PORT"
+            printf 'DB_NAME=%s\n' "$DB_NAME"
+            printf 'DB_USERNAME=%s\n' "$DB_USERNAME"
+            printf 'DB_PASSWORD=%s\n' "$DB_PASSWORD"
+            printf 'FRONTEND_ORIGIN=%s\n' "$FRONTEND_ORIGIN"
+            printf 'SESSION_COOKIE_SECURE=%s\n' "$SESSION_COOKIE_SECURE"
+          } > upload/runtime.env
+
+      - name: Copy files to deployment server
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          source: upload/*
+          target: ${{ vars.DEPLOY_PATH }}/web-template-server
+          strip_components: 1
+
+      - name: Deploy container on server
+        uses: appleboy/ssh-action@v1.0.0
+        env:
+          IMAGE_TAG: ${{ env.IMAGE_TAG }}
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          envs: IMAGE_TAG
+          script: |
+            set -eu
+            cd "${{ vars.DEPLOY_PATH }}/web-template-server"
+            chmod 600 runtime.env
+            docker load -i web-template-server.tar.gz
+            case "$(uname -m)" in
+              x86_64) HOST_ARCH=amd64 ;;
+              aarch64|arm64) HOST_ARCH=arm64 ;;
+              *) echo "Unsupported server architecture: $(uname -m)" >&2; exit 1 ;;
+            esac
+            IMAGE_ARCH=$(docker image inspect --format '{{.Architecture}}' "web-template-server:$IMAGE_TAG")
+            if [ "$IMAGE_ARCH" != "$HOST_ARCH" ]; then
+              echo "Image architecture linux/$IMAGE_ARCH does not match server linux/$HOST_ARCH. Set DEPLOY_PLATFORM correctly." >&2
+              exit 1
+            fi
+            docker stop web-template-server 2>/dev/null || true
+            docker rm web-template-server 2>/dev/null || true
+            docker run -d --name web-template-server \
+              --restart unless-stopped \
+              --env-file runtime.env \
+              -p 8100:8100 \
+              "web-template-server:$IMAGE_TAG"
+            sleep 3
+            if [ "$(docker inspect --format '{{.State.Status}}' web-template-server)" != "running" ]; then
+              docker logs web-template-server
+              exit 1
+            fi
+            rm -f web-template-server.tar.gz
