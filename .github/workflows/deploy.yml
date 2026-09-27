@@ -16,10 +16,10 @@ jobs:
       DEPLOY_PLATFORM: ${{ vars.DEPLOY_PLATFORM || 'linux/amd64' }}
 
     steps:
-      - name: Checkout repository
+      - name: ⭐ 소스 코드 가져오기
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
+      - name: ⭐ Docker 빌드 준비
         uses: docker/setup-buildx-action@v3
 
       - name: Validate deployment settings
@@ -29,6 +29,7 @@ jobs:
           DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
           DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
         run: |
+          echo "⭐ 배포 설정 확인 중"
           for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_PRIVATE_KEY DEPLOY_PATH; do
             if [ -z "${!name}" ]; then
               echo "Missing required GitHub secret/variable: $name" >&2
@@ -42,10 +43,12 @@ jobs:
 
       - name: Build and save Docker image
         run: |
+          echo "⭐ 서버 Docker 이미지 빌드 중"
           docker buildx build \
             --platform "$DEPLOY_PLATFORM" \
             --tag "web-template-server:$IMAGE_TAG" \
             --load .
+          echo "⭐ Docker 이미지 압축 중"
           docker save "web-template-server:$IMAGE_TAG" | gzip > web-template-server.tar.gz
 
       - name: Prepare deployment files
@@ -58,6 +61,7 @@ jobs:
           FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
           SESSION_COOKIE_SECURE: ${{ vars.SESSION_COOKIE_SECURE || 'true' }}
         run: |
+          echo "⭐ 배포 파일 및 환경 설정 준비 중"
           for name in DB_HOST DB_PORT DB_NAME DB_USERNAME DB_PASSWORD FRONTEND_ORIGIN; do
             if [ -z "${!name}" ]; then
               echo "Missing required GitHub secret/variable: $name" >&2
@@ -76,7 +80,7 @@ jobs:
             printf 'SESSION_COOKIE_SECURE=%s\n' "$SESSION_COOKIE_SECURE"
           } > upload/runtime.env
 
-      - name: Copy files to deployment server
+      - name: ⭐ 배포 서버로 파일 전송
         uses: appleboy/scp-action@v0.1.4
         with:
           host: ${{ secrets.DEPLOY_HOST }}
@@ -99,7 +103,9 @@ jobs:
             set -eu
             cd "${{ vars.DEPLOY_PATH }}/web-template-server"
             chmod 600 runtime.env
+            echo "⭐ Docker 이미지 불러오는 중"
             docker load -i web-template-server.tar.gz
+            echo "⭐ 서버와 이미지 아키텍처 확인 중"
             case "$(uname -m)" in
               x86_64) HOST_ARCH=amd64 ;;
               aarch64|arm64) HOST_ARCH=arm64 ;;
@@ -110,16 +116,21 @@ jobs:
               echo "Image architecture linux/$IMAGE_ARCH does not match server linux/$HOST_ARCH. Set DEPLOY_PLATFORM correctly." >&2
               exit 1
             fi
+            echo "⭐ 기존 서버 컨테이너 정리 중"
             docker stop web-template-server 2>/dev/null || true
             docker rm web-template-server 2>/dev/null || true
+            echo "⭐ 새 서버 컨테이너 시작 중"
             docker run -d --name web-template-server \
               --restart unless-stopped \
               --env-file runtime.env \
               -p 8100:8100 \
               "web-template-server:$IMAGE_TAG"
+            echo "⭐ 컨테이너 실행 상태 확인 중"
             sleep 3
             if [ "$(docker inspect --format '{{.State.Status}}' web-template-server)" != "running" ]; then
               docker logs web-template-server
               exit 1
             fi
+            echo "⭐ 배포 임시 파일 정리 중"
             rm -f web-template-server.tar.gz
+            echo "⭐ 서버 컨테이너 배포 완료"
